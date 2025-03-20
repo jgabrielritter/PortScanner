@@ -99,7 +99,7 @@ This project is free to use for educational and ethical purposes.
 
 ## Author
 
-[Your Name]
+J. Gabriel Ritter
 
 ## Acknowledgments
 
