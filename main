@@ -1,0 +1,126 @@
+import socket
+import sys
+import threading
+import time
+from datetime import datetime
+
+def scan_port(target_ip, port, timeout=1):
+    """
+    Scan a single port on the target IP.
+    Returns (port, is_open, service_name) tuple.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    
+    result = sock.connect_ex((target_ip, port))
+    is_open = result == 0
+    
+    service_name = ""
+    if is_open:
+        try:
+            service_name = socket.getservbyport(port)
+        except:
+            service_name = "unknown"
+    
+    sock.close()
+    return (port, is_open, service_name)
+
+def scan_ports(target, port_range=None, num_threads=100, timeout=1):
+    """
+    Scan a range of ports on the target.
+    
+    Args:
+        target: IP address or hostname to scan
+        port_range: Tuple of (start_port, end_port) or None for common ports
+        num_threads: Number of concurrent threads to use
+        timeout: Connection timeout in seconds
+    """
+    # Common ports to scan if no range specified
+    common_ports = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 
+                   993, 995, 1723, 3306, 3389, 5900, 8080]
+    
+    try:
+        target_ip = socket.gethostbyname(target)
+    except socket.gaierror:
+        print(f"Error: Could not resolve hostname '{target}'")
+        return
+    
+    # Determine which ports to scan
+    if port_range:
+        start_port, end_port = port_range
+        ports_to_scan = range(start_port, end_port + 1)
+    else:
+        ports_to_scan = common_ports
+    
+    print(f"\nStarting scan on host {target} ({target_ip})")
+    print(f"Time started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("-" * 60)
+    
+    start_time = time.time()
+    
+    # Results will be stored here
+    results = []
+    
+    # Use a semaphore to limit the number of concurrent threads
+    thread_limiter = threading.Semaphore(num_threads)
+    threads = []
+    
+    def scan_port_worker(port):
+        thread_limiter.acquire()
+        try:
+            result = scan_port(target_ip, port, timeout)
+            if result[1]:  # If port is open
+                results.append(result)
+        finally:
+            thread_limiter.release()
+    
+    # Start threads for scanning
+    for port in ports_to_scan:
+        thread = threading.Thread(target=scan_port_worker, args=(port,))
+        threads.append(thread)
+        thread.start()
+    
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+    
+    # Sort results by port number
+    results.sort()
+    
+    # Print results
+    if results:
+        print(f"Open ports on {target_ip}:")
+        print(f"{'PORT':<10}{'STATE':<10}{'SERVICE'}")
+        print("-" * 60)
+        for port, is_open, service_name in results:
+            print(f"{port:<10}{'open':<10}{service_name}")
+    else:
+        print(f"No open ports found on {target_ip}")
+    
+    elapsed_time = time.time() - start_time
+    print(f"\nScan completed in {elapsed_time:.2f} seconds")
+
+def main():
+    """Main function to parse arguments and run the port scanner."""
+    if len(sys.argv) < 2:
+        print("Usage: python port_scanner.py <target> [start_port] [end_port]")
+        print("Example: python port_scanner.py example.com 1 1000")
+        print("Example: python port_scanner.py 192.168.1.1")
+        sys.exit(1)
+    
+    target = sys.argv[1]
+    
+    port_range = None
+    if len(sys.argv) >= 4:
+        try:
+            start_port = int(sys.argv[2])
+            end_port = int(sys.argv[3])
+            port_range = (start_port, end_port)
+        except ValueError:
+            print("Error: Port numbers must be integers")
+            sys.exit(1)
+    
+    scan_ports(target, port_range)
+
+if __name__ == "__main__":
+    main()

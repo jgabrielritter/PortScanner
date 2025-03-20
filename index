@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Port Scanner</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .card {
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .port-range {
+            display: flex;
+            gap: 10px;
+        }
+        .port-range input {
+            width: calc(50% - 5px);
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 20px;
+            min-height: 200px;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .results-header h2 {
+            margin: 0;
+        }
+        .clear-btn {
+            background-color: #e74c3c;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .clear-btn:hover {
+            background-color: #c0392b;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .port-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .port-table th, .port-table td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #555;
+        }
+        .port-table th {
+            border-bottom: 2px solid #555;
+        }
+        .warning {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .success {
+            color: #2ecc71;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Port Scanner</h1>
+        
+        <div class="card">
+            <h2>Instructions</h2>
+            <p>This tool allows you to scan a target host for open ports. Enter an IP address or hostname, select the ports to scan, and click "Start Scan" to begin.</p>
+            <p><span class="warning">Important:</span> Only scan hosts you have permission to scan. Unauthorized port scanning may be illegal in some jurisdictions.</p>
+        </div>
+        
+        <div class="form-group">
+            <label for="target">Target IP Address or Hostname:</label>
+            <input type="text" id="target" placeholder="e.g., 192.168.1.1 or example.com" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Port Selection:</label>
+            <select id="port-selection">
+                <option value="common">Common Ports</option>
+                <option value="custom">Custom Port Range</option>
+                <option value="all">All Ports (1-65535) - VERY SLOW</option>
+            </select>
+        </div>
+        
+        <div class="form-group port-range" id="custom-range" style="display: none;">
+            <div>
+                <label for="start-port">Start Port:</label>
+                <input type="number" id="start-port" min="1" max="65535" value="1">
+            </div>
+            <div>
+                <label for="end-port">End Port:</label>
+                <input type="number" id="end-port" min="1" max="65535" value="1000">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="timeout">Connection Timeout (seconds):</label>
+            <input type="number" id="timeout" min="0.1" max="10" step="0.1" value="1">
+        </div>
+        
+        <div class="form-group">
+            <label for="threads">Number of Threads:</label>
+            <input type="number" id="threads" min="1" max="500" value="100">
+        </div>
+        
+        <button id="scan-btn">Start Scan</button>
+        
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>Scanning ports... This may take a while depending on the target and number of ports.</p>
+        </div>
+        
+        <div class="results-header">
+            <h2>Scan Results</h2>
+            <button class="clear-btn" id="clear-btn">Clear Results</button>
+        </div>
+        
+        <div class="results" id="results">
+            <p>Results will appear here after scanning.</p>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const targetInput = document.getElementById('target');
+            const portSelection = document.getElementById('port-selection');
+            const customRange = document.getElementById('custom-range');
+            const startPort = document.getElementById('start-port');
+            const endPort = document.getElementById('end-port');
+            const timeout = document.getElementById('timeout');
+            const threads = document.getElementById('threads');
+            const scanBtn = document.getElementById('scan-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+            
+            // Toggle custom port range input visibility
+            portSelection.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    customRange.style.display = 'flex';
+                } else {
+                    customRange.style.display = 'none';
+                }
+            });
+            
+            // Clear results
+            clearBtn.addEventListener('click', function() {
+                resultsDiv.innerHTML = '<p>Results will appear here after scanning.</p>';
+            });
+            
+            // Perform scan
+            scanBtn.addEventListener('click', function() {
+                // Validate input
+                if (!targetInput.value) {
+                    alert('Please enter a target IP or hostname');
+                    return;
+                }
+                
+                const target = targetInput.value;
+                let portRange;
+                
+                if (portSelection.value === 'custom') {
+                    const start = parseInt(startPort.value);
+                    const end = parseInt(endPort.value);
+                    
+                    if (start > end) {
+                        alert('Start port must be less than or equal to end port');
+                        return;
+                    }
+                    
+                    if (end - start > 10000) {
+                        if (!confirm('Scanning more than 10,000 ports may take a long time. Continue?')) {
+                            return;
+                        }
+                    }
+                    
+                    portRange = [start, end];
+                } else if (portSelection.value === 'all') {
+                    if (!confirm('Scanning all 65,535 ports will take a very long time. Continue?')) {
+                        return;
+                    }
+                    portRange = [1, 65535];
+                } else {
+                    // Common ports
+                    portRange = null;
+                }
+                
+                // Show loading indicator
+                loadingDiv.style.display = 'block';
+                scanBtn.disabled = true;
+                
+                // In a real implementation, this would make an AJAX call to your Python backend
+                // For this demo, we'll simulate a scan with setTimeout
+                setTimeout(function() {
+                    simulateScan(target, portRange, parseFloat(timeout.value), parseInt(threads.value));
+                    loadingDiv.style.display = 'none';
+                    scanBtn.disabled = false;
+                }, 2000);
+            });
+            
+            // Simulate a port scan (in a real implementation, this would call your Python backend)
+            function simulateScan(target, portRange, timeout, threads) {
+                const scanTimeStart = new Date();
+                
+                // In a real implementation, you would call your Python script here
+                // For this demo, we'll generate some fake results
+                const results = [];
+                
+                // Common ports that are often open
+                const commonPorts = {
+                    22: 'ssh',
+                    80: 'http',
+                    443: 'https',
+                    25: 'smtp',
+                    21: 'ftp',
+                    3306: 'mysql',
+                    8080: 'http-proxy'
+                };
+                
+                // Simulate some random open ports
+                let portsToCheck = [];
+                
+                if (portRange === null) {
+                    // Common ports
+                    portsToCheck = Object.keys(commonPorts).map(Number);
+                } else {
+                    // Custom range - just pick a few for the simulation
+                    const [start, end] = portRange;
+                    const range = end - start + 1;
+                    const numOpenPorts = Math.min(5, Math.floor(range * 0.02));
+                    
+                    for (let i = 0; i < numOpenPorts; i++) {
+                        const port = Math.floor(Math.random() * range) + start;
+                        portsToCheck.push(port);
+                    }
+                    
+                    // Add some common ports if they're in range
+                    for (const port of Object.keys(commonPorts).map(Number)) {
+                        if (port >= start && port <= end && !portsToCheck.includes(port)) {
+                            portsToCheck.push(port);
+                        }
+                    }
+                }
+                
+                // Add each port to results
+                for (const port of portsToCheck) {
+                    // 80% chance the port is open in this simulation
+                    if (Math.random() < 0.8) {
+                        let service = commonPorts[port] || "unknown";
+                        results.push({ port, state: 'open', service });
+                    }
+                }
+                
+                // Sort results by port number
+                results.sort((a, b) => a.port - b.port);
+                
+                // Calculate scan time
+                const scanTimeEnd = new Date();
+                const scanTime = (scanTimeEnd - scanTimeStart) / 1000; // in seconds
+                
+                // Display results
+                let html = `<h3>Scan Results for ${target}</h3>`;
+                html += `<p>Time started: ${scanTimeStart.toLocaleString()}</p>`;
+                html += `<p>Scan completed in ${scanTime.toFixed(2)} seconds</p>`;
+                
+                if (results.length > 0) {
+                    html += '<table class="port-table">';
+                    html += '<tr><th>PORT</th><th>STATE</th><th>SERVICE</th></tr>';
+                    
+                    for (const result of results) {
+                        html += `<tr>
+                            <td>${result.port}</td>
+                            <td class="success">${result.state}</td>
+                            <td>${result.service}</td>
+                        </tr>`;
+                    }
+                    
+                    html += '</table>';
+                } else {
+                    html += '<p>No open ports found.</p>';
+                }
+                
+                html += `<p><strong>Scan parameters:</strong> Timeout: ${timeout}s, Threads: ${threads}</p>`;
+                
+                resultsDiv.innerHTML = html;
+                
+                // For a real implementation, this would connect to your Python backend:
+                /*
+                fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        target: target,
+                        portRange: portRange,
+                        timeout: timeout,
+                        threads: threads
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Process and display the results
+                    resultsDiv.innerHTML = formatResults(data);
+                })
+                .catch(error => {
+                    resultsDiv.innerHTML = `<p class="warning">Error: ${error.message}</p>`;
+                })
+                .finally(() => {
+                    loadingDiv.style.display = 'none';
+                    scanBtn.disabled = false;
+                });
+                */
+            }
+        });
+    </script>
+</body>
+</html>
